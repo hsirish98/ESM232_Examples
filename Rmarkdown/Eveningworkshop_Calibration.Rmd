@@ -119,6 +119,82 @@ cor(sager_aug$model, sager_aug$obs)
 
 * Code that metric as a function - and then apply it
 
+
+```{r, warning=FALSE, message=FALSE}
+## month checker
+
+
+# 
+# month_validate <- function(numeric_month, dataframe) {
+#   
+#   intermediate_df <- dataframe %>% group_by(wy, month) %>%
+#     summarize(model=sum(model), obs=sum(obs)) 
+#   
+#   month_df <- subset(intermediate_df, month==numeric_month)
+#   
+#   results = cor(month_df$model, month_df$obs)
+#   
+#   return(results)
+# }
+
+## finds the error for the min rainfall for the summer months
+# summer_validate <- function(dataframe){
+# intermediate <- dataframe %>% group_by(wy, month) %>%
+#     summarize(model=sum(model), obs=sum(obs)) %>%
+#   filter(month %in% c(6,7,8,9)) %>% 
+#   group_by(wy) %>%
+#   summarize(min_obs = min(obs), min_mod = min(model)) %>%
+#   mutate(error=(abs(min_obs-min_mod)/min_obs))
+#          
+# 
+# error = mean(intermediate$error)
+# }
+# 
+# ## finds the error for the max rainfall for the summer months
+# winter_validate <- function(dataframe){
+# intermediate <- dataframe %>% group_by(wy, month) %>%
+#     summarize(model=sum(model), obs=sum(obs)) %>%
+#   filter(month %in% c(12,1,2,3)) %>% 
+#   group_by(wy) %>%
+#   summarize(max_obs = max(obs), max_mod = max(model)) %>%
+#   mutate(error=(abs(max_obs-max_mod)/max_obs))
+#          
+# 
+# error = mean(intermediate$error)
+# }
+
+
+combine_metrics <- function(m,o, month, day, year,wy){
+   flow = cbind.data.frame(m,o, month, day, year,wy)
+   
+  intermediate_winter <- flow %>% group_by(wy, month) %>%
+    summarize(model=sum(m), obs=sum(o)) %>%
+  filter(month %in% c(12,1,2,3)) %>% 
+  group_by(wy) %>%
+  summarize(max_obs = max(o), max_mod = max(m)) %>%
+  mutate(error=(abs(max_obs-max_mod)/max_obs))
+  
+  winter <- mean(intermediate_winter$error)
+  
+   intermediate_summer <- flow %>% group_by(wy, month) %>%
+    summarize(model=sum(m), obs=sum(o)) %>%
+  filter(month %in% c(6,7,8,9)) %>% 
+  group_by(wy) %>%
+ summarize(min_obs = min(o), min_mod = min(m)) %>%
+   mutate(error=(abs(min_obs-min_mod)/min_obs))
+  
+  summer <- mean(intermediate_summer$error)
+  combined <- 0.5*(1-summer) + 0.5*(1-winter)
+  
+  return(list(summer=summer,winter=winter, combined=combined))
+}
+
+combine_metrics(m=sager$model,o=sager$obs, month=sager$month, day=sager$day, year=sager$year, wy=sager$wy)
+
+
+```
+
+
 # Using multiple metrics. 
 
 * depends on what you want the model to get right
@@ -278,7 +354,7 @@ head(res)
 # use apply to compute for all the data
 source("../R/compute_lowflowmetrics_all.R")
 res = short_msage %>% select(-date, -month, -day, -year, -wy, -obs ) %>%
-  map_df(compute_lowflowmetrics_all, o=short_msage$obs, month=short_msage$month, day=short_msage$day, year=short_msage$year, wy=short_msage$wy)
+  map_df(combine_metrics, o=short_msage$obs, month=short_msage$month, day=short_msage$day, year=short_msage$year, wy=short_msage$wy)
 # note here we use map_df to get a dataframe back 
 
 
@@ -301,7 +377,7 @@ best = res[which.max(res$combined),]
 # so we can look at the full time series
 
 # lets start with streamflow estimates from best performing parameter set
- ggplot(msage, aes(date, msage[,best$sim])) + geom_line()+geom_line(aes(date, obs), col="red") 
+ggplot(msage, aes(date, msage[,best$sim])) + geom_line()+geom_line(aes(date, obs), col="red") 
 
  
 # for comparison lets consider how worst and best parameters perform for subsequent simulations
